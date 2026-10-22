@@ -42,7 +42,7 @@ function scoutShowResearch(a){
  {name:'Poshmark',active:q=>'https://poshmark.com/search?query='+q},
  {name:'Facebook Marketplace',active:q=>'https://www.facebook.com/marketplace/search/?query='+q}
  ];
- const comps=[];let autoMarkets=[];const money=n=>'
+ const comps=[];let autoMarkets=[];const money=n=>String.fromCharCode(36)+n.toFixed(2);
  const recommendation=document.createElement('div');recommendation.className='panel';recommendation.style.background='#fffaf0';target.append(recommendation);
  const recTitle=document.createElement('strong');recTitle.textContent='✧ Scout’s recommendation';recommendation.append(recTitle);
  const recText=document.createElement('p');recText.className='sub';recommendation.append(recText);
