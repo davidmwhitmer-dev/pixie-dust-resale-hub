@@ -46,7 +46,44 @@ function scoutShowResearch(a){
  const add=document.createElement('button');add.type='button';add.className='btn gold';add.style.marginTop='8px';add.textContent='＋ Add comparable';target.append(add);
  const list=document.createElement('div');list.id='scoutCompList';target.append(list);
  const comps=[];
- const show=()=>{list.replaceChildren();if(!comps.length)return;const summary=document.createElement('p');summary.style.fontWeight='700';const sold=comps.filter(x=>x.type==='sold').map(x=>x.price).sort((a,b)=>a-b);summary.textContent=sold.length?'Verified sold examples: '+sold.length+' · Median 
+ const show=()=>{
+  list.replaceChildren();if(!comps.length)return;
+  const sold=comps.filter(x=>x.type==='sold').map(x=>x.price).sort((a,b)=>a-b);
+  const summary=document.createElement('p');summary.style.fontWeight='700';
+  const median=sold.length?(sold.length%2?sold[(sold.length-1)/2]:(sold[sold.length/2-1]+sold[sold.length/2])/2):null;
+  summary.textContent=sold.length?'Verified sold examples: '+sold.length+' · Median $'+median.toFixed(2):'No verified sold examples yet';
+  list.append(summary);
+  comps.forEach((x,i)=>{
+   const row=document.createElement('div');row.className='two';
+   const info=document.createElement('span');info.textContent=x.market+' · '+(x.type==='sold'?'Sold':'Asking')+' · $'+x.price.toFixed(2);row.append(info);
+   if(x.url){const link=document.createElement('a');link.href=x.url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='View ↗';row.append(link)}
+   const remove=document.createElement('button');remove.type='button';remove.className='btn outline small';remove.textContent='Remove';remove.onclick=()=>{comps.splice(i,1);show()};row.append(remove);list.append(row);
+  });
+ };
+ add.onclick=()=>{
+  const n=Number(price.value);
+  if(price.value===''||!Number.isFinite(n)||n<0){alert('Enter a valid comparable price.');return}
+  if(url.value&&!/^https:\/\//i.test(url.value)){alert('Use a full https:// listing URL.');return}
+  comps.push({market:mk.value,type:type.value,price:n,url:url.value.trim()});price.value='';url.value='';show();
+ };
+ const footer=document.createElement('div');footer.className='row';footer.style.marginTop='15px';
+ const manual=document.createElement('button');manual.className='btn outline';manual.type='button';manual.textContent='Continue to inventory (optional) →';manual.onclick=()=>go('add');footer.append(manual);target.append(footer);
+ target.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function renderScoutMarkets(target,query){
+ target.replaceChildren();if(!query.trim()){target.textContent='Enter search terms above.';return}
+ const q=encodeURIComponent(query.trim());
+ const options=[
+ ['eBay · Sold','https://www.ebay.com/sch/i.html?_nkw='+q+'&LH_Sold=1&LH_Complete=1'],
+ ['eBay · Active','https://www.ebay.com/sch/i.html?_nkw='+q],
+ ['Mercari','https://www.mercari.com/search/?keyword='+q],
+ ['Poshmark','https://poshmark.com/search?query='+q],
+ ['Facebook Marketplace','https://www.facebook.com/marketplace/search/?query='+q]
+ ];
+ const row=document.createElement('div');row.className='row';row.style.marginTop='10px';
+ options.forEach(([name,url])=>{const link=document.createElement('a');link.className='btn outline small';link.style.textDecoration='none';link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.textContent=name+' ↗';row.append(link)});target.append(row);
+}
+window.scoutAnalyzeItem=async function(){
  const st=el('scoutStatus'),files=[...el('scoutPhotos').files];
  if(!files.length){st.textContent='Choose photos first.';return}
  if(files.length>5){st.textContent='Please select no more than 5 photos of one item.';return}
