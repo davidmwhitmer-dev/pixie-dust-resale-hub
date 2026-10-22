@@ -1,5 +1,5 @@
 // Pixie Scout Cloudflare Worker — no credentials belong in this file.
-// Set OPENAI_API_KEY and SCOUT_ACCESS_TOKEN as encrypted Worker secrets.
+// Set OPENAI_API_KEY, SCOUT_ACCESS_TOKEN and SERPAPI_API_KEY as encrypted Worker secrets.
 // Prototype: requires bearer token. Do not embed that token in public website code.
 const ORIGIN = "https://davidmwhitmer-dev.github.io";
 function headers(origin) { return {"Access-Control-Allow-Origin":origin===ORIGIN?ORIGIN:"null","Access-Control-Allow-Headers":"Authorization, Content-Type","Access-Control-Allow-Methods":"POST, OPTIONS","Vary":"Origin","Cache-Control":"no-store"}; }
@@ -8,10 +8,41 @@ export default {
  async fetch(req,env) {
   const origin=req.headers.get("Origin")||"";
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers:headers(origin)});
-  if(req.method!=="POST"||new URL(req.url).pathname!=="/analyze")return reply({error:"Not found"},404,origin);
+  if(req.method!=="POST"||!["/analyze","/research"].includes(new URL(req.url).pathname))return reply({error:"Not found"},404,origin);
   if(origin!==ORIGIN)return reply({error:"Origin not allowed"},403,origin);
   if(!env.OPENAI_API_KEY||!env.SCOUT_ACCESS_TOKEN)return reply({error:"Configure both Worker secrets"},503,origin);
   if(req.headers.get("Authorization")!=="Bearer "+env.SCOUT_ACCESS_TOKEN)return reply({error:"Unauthorized"},401,origin);
+  if(new URL(req.url).pathname==="/research") {
+   if(!env.SERPAPI_API_KEY)return reply({error:"SERPAPI_API_KEY is not configured"},503,origin);
+   try {
+    const body=await req.json(),query=String(body.query||"").trim().slice(0,160);
+    if(query.length<4)return reply({error:"Search query is too short"},400,origin);
+    const markets=[["eBay","ebay.com"],["Mercari","mercari.com"],["Poshmark","poshmark.com"],["Facebook Marketplace","facebook.com/marketplace"]];
+    const results=await Promise.all(markets.map(async ([market,site])=>{
+     try {
+      const p=new URLSearchParams({engine:"google",q:"site:"+site+" "+query+" price",num:"20",api_key:env.SERPAPI_API_KEY});
+      const response=await fetch("https://serpapi.com/search.json?"+p);
+      const data=await response.json();
+      if(!response.ok||data.error)return {market,status:"unavailable",reason:String(data.error||"Search provider error").slice(0,180),listings:[]};
+      const listings=[],seen=new Set();
+      for(const item of data.organic_results||[]){
+       const link=String(item.link||"");
+       if(!link.startsWith("https://")||seen.has(link))continue;
+       if(!new URL(link).hostname.endsWith(site.split("/")[0]))continue;
+       const raw=[item.title||"",item.snippet||"",item.rich_snippet?.top?.detected_extensions?.price||""].join(" ");
+       const found=[...raw.matchAll(/(?:US\\s*)?\\$\\s*([0-9]{1,5}(?:,[0-9]{3})*(?:\\.[0-9]{2})?)/g)];
+       if(!found.length)continue;
+       const price=Number(found[0][1].replace(/,/g,""));
+       if(!(price>0&&price<100000))continue;
+       seen.add(link);
+       listings.push({title:String(item.title||"").slice(0,180),url:link,price});
+      }
+      return {market,status:listings.length?"found":"no_prices",listings:listings.slice(0,20),searchedAt:new Date().toISOString()};
+     }catch(e){return {market,status:"unavailable",reason:"Search failed",listings:[]}}
+    }));
+    return reply({ok:true,query,markets:results,disclaimer:"Publicly indexed asking-price candidates only; results may be stale or mismatched. No sold-price verification."},200,origin);
+   }catch(e){return reply({error:"Research failed",detail:String(e.message||e)},500,origin)}
+  }
   try {
    if(Number(req.headers.get("content-length")||0)>13000000)return reply({error:"Too large"},413,origin);
    const body=await req.json(),images=body.images;
