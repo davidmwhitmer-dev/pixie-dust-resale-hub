@@ -51,7 +51,7 @@ function scoutShowResearch(a){
  const runResearch=async()=>{
   researchButton.disabled=true;researchStatus.textContent='Searching public marketplace listings (up to four searches)…';
   try{
-   const res=await fetch(SCOUT_URL.replace(/\\/analyze$/,'/research'),{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+scoutToken},body:JSON.stringify({query:query.value.trim()})});
+   const res=await fetch(SCOUT_URL.replace('/analyze','/research'),{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+scoutToken},body:JSON.stringify({query:query.value.trim()})});
    const data=await res.json();if(!res.ok)throw Error(data.detail||data.error||'Research unavailable');
    autoMarkets=data.markets||[];render();
    const count=autoMarkets.reduce((n,m)=>n+(m.listings||[]).length,0);
