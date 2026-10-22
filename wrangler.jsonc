@@ -1,0 +1,7 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pixie-dust-resale-hub",
+  "main": "./pixie-scout-worker.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true
+}
