@@ -29,10 +29,13 @@ export default {
        const link=String(item.link||"");
        if(!link.startsWith("https://")||seen.has(link))continue;
        if(!new URL(link).hostname.endsWith(site.split("/")[0]))continue;
-       const raw=[item.title||"",item.snippet||"",item.rich_snippet?.top?.detected_extensions?.price||""].join(" ");
-       const found=[...raw.matchAll(/(?:US\\s*)?\\$\\s*([0-9]{1,5}(?:,[0-9]{3})*(?:\\.[0-9]{2})?)/g)];
-       if(!found.length)continue;
-       const price=Number(found[0][1].replace(/,/g,""));
+       const rich=item.rich_snippet?.top?.detected_extensions||{};
+       const ext=item.rich_snippet?.bottom?.detected_extensions||{};
+       const direct=[rich.price,ext.price,item.price,item.extracted_price].map(Number).find(v=>Number.isFinite(v)&&v>0);
+       const raw=[item.title||"",item.snippet||"",JSON.stringify(item.rich_snippet||{}),JSON.stringify(item.extensions||[])].join(" ");
+       const found=raw.match(/(?:US\\s*)?\\$\\s*([0-9]{1,5}(?:,[0-9]{3})*(?:\\.[0-9]{2})?)/);
+       if(!found&&!direct)continue;
+       const price=direct||Number(found[1].replace(/,/g,""));
        if(!(price>0&&price<100000))continue;
        seen.add(link);
        listings.push({title:String(item.title||"").slice(0,180),url:link,price});
