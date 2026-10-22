@@ -33,7 +33,7 @@ export default {
        const ext=item.rich_snippet?.bottom?.detected_extensions||{};
        const direct=[rich.price,ext.price,item.price,item.extracted_price].map(Number).find(v=>Number.isFinite(v)&&v>0);
        const raw=[item.title||"",item.snippet||"",JSON.stringify(item.rich_snippet||{}),JSON.stringify(item.extensions||[])].join(" ");
-       const found=raw.match(/(?:US\\s*)?\\$\\s*([0-9]{1,5}(?:,[0-9]{3})*(?:\\.[0-9]{2})?)/);
+       const found=raw.match(/(?:US\s*)?\$\s*([0-9]{1,5}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/);
        if(!found&&!direct)continue;
        const price=direct||Number(found[1].replace(/,/g,""));
        if(!(price>0&&price<100000))continue;
