@@ -32,7 +32,7 @@ function scoutShowResearch(a){
  const identified=document.createElement('div');identified.className='panel';identified.style.background='#fffaf0';identified.style.marginBottom='12px';target.append(identified);
  const name=document.createElement('strong');name.textContent=a.name||'Item not confidently identified';identified.append(name);
  const details=document.createElement('p');details.className='sub';details.textContent=[a.character,a.size,a.condition].filter(Boolean).join(' · ');identified.append(details);
- const disclosure=document.createElement('p');disclosure.className='sub';disclosure.textContent='Photo identification is active. Automatic marketplace prices and direct image matching are not connected yet. No estimated prices are presented as real data.';identified.append(disclosure);
+ const disclosure=document.createElement('p');disclosure.className='sub';disclosure.textContent='Photo identification is active. Public search research is available when the updated Worker is deployed. Prices are publicly indexed asking-price candidates, not verified sales or image matches.';identified.append(disclosure);
  const label=document.createElement('label');label.textContent='Item identified from your photos — refine the search';target.append(label);
  const query=document.createElement('input');query.value=[a.name,a.character,a.size].filter(Boolean).join(' ').slice(0,170);target.append(query);
  const grid=document.createElement('div');grid.className='scout-price-grid';grid.style.cssText='display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0';target.append(grid);
@@ -42,7 +42,83 @@ function scoutShowResearch(a){
  {name:'Poshmark',active:q=>'https://poshmark.com/search?query='+q},
  {name:'Facebook Marketplace',active:q=>'https://www.facebook.com/marketplace/search/?query='+q}
  ];
- const comps=[];const money=n=>'$'+n.toFixed(2);
+ const comps=[];let autoMarkets=[];const money=n=>'
+ const recommendation=document.createElement('div');recommendation.className='panel';recommendation.style.background='#fffaf0';target.append(recommendation);
+ const recTitle=document.createElement('strong');recTitle.textContent='✧ Scout’s recommendation';recommendation.append(recTitle);
+ const recText=document.createElement('p');recText.className='sub';recommendation.append(recText);
+ const researchStatus=document.createElement('p');researchStatus.className='sub';researchStatus.textContent='Research has not run yet.';target.append(researchStatus);
+ const researchButton=document.createElement('button');researchButton.className='btn outline small';researchButton.type='button';researchButton.textContent='↻ Refresh marketplace research';target.append(researchButton);
+ const runResearch=async()=>{
+  researchButton.disabled=true;researchStatus.textContent='Searching public marketplace listings (up to four searches)…';
+  try{
+   const res=await fetch(SCOUT_URL.replace(/\\/analyze$/,'/research'),{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+scoutToken},body:JSON.stringify({query:query.value.trim()})});
+   const data=await res.json();if(!res.ok)throw Error(data.detail||data.error||'Research unavailable');
+   autoMarkets=data.markets||[];render();
+   const count=autoMarkets.reduce((n,m)=>n+(m.listings||[]).length,0);
+   researchStatus.textContent=count+' publicly indexed price candidates found. Verify matches before pricing; sold prices are not confirmed.';
+  }catch(e){researchStatus.textContent='Automatic research unavailable: '+e.message+'. Check Worker deployment and secret.'}
+  finally{researchButton.disabled=false}
+ };
+ researchButton.onclick=runResearch;
+ const sub=document.createElement('h3');sub.textContent='Optional: record verified comparables';sub.style.margin='18px 0 8px';target.append(sub);
+ const info=document.createElement('p');info.className='sub';info.textContent='Manually verified comparables can supplement public search results. Prices are not required to identify your item.';target.append(info);
+ const select=document.createElement('select');mkts.forEach(m=>{const o=document.createElement('option');o.textContent=m.name;select.append(o)});target.append(select);
+ const kind=document.createElement('select');kind.style.marginTop='8px';[['asking','Active asking price'],['sold','Verified sold price']].forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;kind.append(o)});target.append(kind);
+ const price=document.createElement('input');price.type='number';price.min='0';price.step='0.01';price.placeholder='Verified price ($)';price.style.marginTop='8px';target.append(price);
+ const add=document.createElement('button');add.className='btn outline small';add.type='button';add.style.marginTop='8px';add.textContent='Add verified price';target.append(add);
+ const render=()=>{
+  grid.replaceChildren();const q=encodeURIComponent(query.value.trim());
+  mkts.forEach(m=>{
+   const card=document.createElement('div');card.className='panel scout-price-card';card.style.cssText='margin:0;padding:12px 10px;background:#fff;min-width:0;border-radius:14px';grid.append(card);
+   const n=document.createElement('strong');n.textContent=m.name;card.append(n);
+   const matches=comps.filter(x=>x.market===m.name);const found=autoMarkets.find(x=>x.market===m.name);const candidates=(found?.listings||[]).filter(x=>Number.isFinite(x.price));
+   const asking=matches.filter(x=>x.kind==='asking').map(x=>x.price),sold=matches.filter(x=>x.kind==='sold').map(x=>x.price);
+   const prices=candidates.map(x=>x.price);const average=prices.length?prices.reduce((s,v)=>s+v,0)/prices.length:(asking.length?asking.reduce((s,v)=>s+v,0)/asking.length:null);
+   const big=document.createElement('div');big.style.cssText='font-size:25px;font-weight:750;color:#101a35;margin:9px 0 3px';big.textContent=average===null?'—':money(average);card.append(big);
+   const caption=document.createElement('p');caption.className='sub';caption.style.cssText='font-size:11px;line-height:1.35';caption.textContent=prices.length?'Indexed asking prices · '+prices.length+' candidates':(average===null?(found?.status==='unavailable'?'Search unavailable':'No public prices found'):'Manual asking prices · '+asking.length+' verified');card.append(caption);
+   const range=document.createElement('p');range.style.cssText='font-size:11px;line-height:1.4;overflow-wrap:anywhere';range.textContent='Asking range: '+(prices.length?money(Math.min(...prices))+' – '+money(Math.max(...prices)):(asking.length?money(Math.min(...asking))+' – '+money(Math.max(...asking)):'Not available'));card.append(range);
+   const soldLine=document.createElement('p');soldLine.className='sub';soldLine.style.cssText='font-size:11px;line-height:1.4;overflow-wrap:anywhere';soldLine.textContent='Sold average: '+(sold.length?money(sold.reduce((s,v)=>s+v,0)/sold.length):'Not available');card.append(soldLine);
+   if(q){const row=document.createElement('div');row.className='row';row.style.cssText='margin-top:10px;display:flex;flex-wrap:wrap;gap:5px';card.append(row);
+    const link=(text,url)=>{const a=document.createElement('a');a.className='btn outline small';a.style.cssText='text-decoration:none;padding:7px 8px;font-size:11px;white-space:nowrap';a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=text+' ↗';row.append(a)};
+    if(m.sold)link('Sold',m.sold(q));link('Listings',m.active(q));if(candidates.length)link('Price sources',candidates[0].url);
+   }
+  });
+  const sold=comps.filter(x=>x.kind==='sold');recText.textContent=sold.length?'Verified sold prices recorded: '+sold.length+'. Compare fees and shipping before choosing.':(autoMarkets.some(m=>m.listings?.length)?'Public asking-price candidates are available above. These are not confirmed exact matches or sold prices; verify before listing.':'No verified sold listings yet. Research may be unavailable or return no matches.');
+ };
+ query.addEventListener('input',render);
+ add.onclick=()=>{const n=Number(price.value);if(price.value===''||!Number.isFinite(n)||n<0){alert('Enter a valid verified price.');return}comps.push({market:select.value,kind:kind.value,price:n});price.value='';render()};
+ const foot=document.createElement('p');foot.className='sub';foot.textContent='Automatic averages use publicly indexed asking-price candidates, which may be stale or mismatched. Manually verified entries are kept separate. No sold-price claims are inferred.';target.append(foot);
+ const next=document.createElement('button');next.className='btn outline';next.type='button';next.style.marginTop='10px';next.textContent='Continue to inventory (optional) →';next.onclick=()=>go('add');target.append(next);
+ render();target.scrollIntoView({behavior:'smooth',block:'start'});runResearch();
+}
+window.scoutAnalyzeItem=async function(){
+ const st=el('scoutStatus'),files=[...el('scoutPhotos').files];
+ if(!files.length){st.textContent='Choose photos first.';return}
+ if(files.length>5){st.textContent='Please select no more than 5 photos of one item.';return}
+ if(!scoutToken){scoutToken=prompt('Enter your private Pixie Scout access token.')||'';if(!scoutToken){st.textContent='Access token required.';return}if(confirm('Remember this token on this device? Only choose OK on a private device.')){try{localStorage.setItem(SCOUT_TOKEN_STORAGE,scoutToken)}catch(e){}}}
+ const btn=document.querySelector('.scout-analyze');btn.disabled=true;st.textContent='Preparing photos…';
+ try{
+  const images=await Promise.all(files.map(shrinkPhoto));
+  st.textContent='Pixie Scout is analyzing your item…';
+  const res=await fetch(SCOUT_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+scoutToken},body:JSON.stringify({images})});
+  const data=await res.json();
+  if(!res.ok){if(res.status===401){scoutToken='';try{localStorage.removeItem(SCOUT_TOKEN_STORAGE)}catch(e){}}throw Error(data.detail||data.error||'AI request failed')}
+  const a=data.analysis||{};
+  scoutShowResearch(a);
+  st.textContent='Item identified. Automatic marketplace research started. No inventory fields were changed.';
+
+ }catch(e){st.textContent='Could not analyze: '+e.message;alert('Pixie Scout: '+e.message)}
+ finally{btn.disabled=false}
+};
+el('scoutPhotos').addEventListener('change',function(){const grid=el('scoutPhotoGrid');grid.replaceChildren();const files=[...this.files].slice(0,8);for(const f of files){const img=document.createElement('img');img.alt='Selected item photo';img.style.cssText='width:70px;height:70px;object-fit:cover;border-radius:10px';const u=URL.createObjectURL(f);img.onload=()=>URL.revokeObjectURL(u);img.src=u;grid.append(img)}el('scoutStatus').textContent=files.length+' photo(s) selected. Ready to analyze with Pixie Scout.';});
+window.scoutResearchItem=function(){const q=fields().join(' ');if(!q){alert('Enter an item name or identifying details to search.');return}const encoded=encodeURIComponent(q);const links=[['eBay sold comparables','https://www.ebay.com/sch/i.html?_nkw='+encoded+'&LH_Sold=1&LH_Complete=1'],['eBay active listings','https://www.ebay.com/sch/i.html?_nkw='+encoded],['Mercari','https://www.mercari.com/search/?keyword='+encoded],['Poshmark','https://poshmark.com/search?query='+encoded],['Depop','https://www.depop.com/search/?q='+encoded]];const target=el('scoutLinks');target.replaceChildren();links.forEach(([label,url])=>{const a=document.createElement('a');a.className='btn outline small';a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.style.display='inline-block';a.style.margin='8px 6px 0 0';a.textContent=label+' ↗';target.append(a)});const p=document.createElement('p');p.className='sub';p.textContent='Sold prices require exact matches and manual verification. Active asking prices are not sold values.';target.append(p)};
+window.scoutDraftItem=function(){const name=el('name').value.trim();if(!name){alert('Enter an item name first.');return}const category=el('category').value,condition=el('condition').value,character=el('character').value.trim(),edition=el('size').value.trim();el('scoutListingTitle').value=[name,edition,condition].filter(Boolean).join(' ').slice(0,80);el('scoutListingDescription').value=[name,'Category: '+category,character?'Character / collection: '+character:'',edition?'Size / edition: '+edition:'','Condition: '+condition,'Please review photos for details.','Authenticity, tags, measurements, flaws, and included packaging: [VERIFY BEFORE POSTING]'].filter(Boolean).join('\n');el('scoutKeywords').value=[category,character,edition].filter(Boolean).join(', ');el('scoutShipping').value='Measure and weigh item after packing. Verify shipping dimensions, carrier and cost.'};
+window.scoutUsePrice=function(){const val=el('scoutSuggestedPrice').value;if(val===''||!Number.isFinite(Number(val))||Number(val)<0){alert('Enter a verified nonnegative price first.');return}el('price').value=val};
+window.scoutCopyItem=async function(){const t=[el('scoutListingTitle').value,el('scoutListingDescription').value,'Keywords: '+el('scoutKeywords').value,'Shipping: '+el('scoutShipping').value].join('\n\n');if(!el('scoutListingTitle').value.trim()){alert('Generate a draft first.');return}try{await navigator.clipboard.writeText(t);alert('Listing copied ✨')}catch{el('scoutListingDescription').focus();el('scoutListingDescription').select();alert('Clipboard unavailable. Select and copy the description manually.')}};
+window.scoutSaveDraftNotes=function(){if(!el('scoutListingTitle').value.trim()){alert('Generate a draft first.');return}const t=['Pixie Scout draft — review before publishing','Title: '+el('scoutListingTitle').value,'Description: '+el('scoutListingDescription').value,'Keywords: '+el('scoutKeywords').value,'Shipping: '+el('scoutShipping').value].join('\n');const notes=el('notes');notes.value=[notes.value.trim(),t].filter(Boolean).join('\n\n');alert('Draft added to item notes. Tap Save treasure to keep it.')};
+})();
+</script></body></html>
++n.toFixed(2);
  const recommendation=document.createElement('div');recommendation.className='panel';recommendation.style.background='#fffaf0';target.append(recommendation);
  const recTitle=document.createElement('strong');recTitle.textContent='✧ Scout’s recommendation';recommendation.append(recTitle);
  const recText=document.createElement('p');recText.className='sub';recommendation.append(recText);
